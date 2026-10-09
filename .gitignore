@@ -1,0 +1,19 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+.next/
+
+# Secrets
+.env
+.env.local
+
+# ML artifacts (large)
+ml/data/
+*.h5
+*.pkl
+*.npy
