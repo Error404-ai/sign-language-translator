@@ -1,13 +1,16 @@
 import numpy as np
 
+def _norm_hand(h):
+    wrist = h[0].copy()
+    h = h - wrist
+    scale = np.linalg.norm(h[9]) or 1.0
+    return np.concatenate([(h / scale).flatten(), wrist[:2]])
+
 def extract_keypoints(results):
-    """Return a 126-float vector: left hand (63) + right hand (63).
-    Each hand = 21 landmarks x (x, y, z). Missing hand = zeros."""
-    out = np.zeros(126, dtype=np.float32)
+    out = np.zeros(130, dtype=np.float32)
     if results.multi_hand_landmarks and results.multi_handedness:
         for hand, info in zip(results.multi_hand_landmarks, results.multi_handedness):
-            label = info.classification[0].label  # "Left" or "Right"
-            slot = 0 if label == "Left" else 1
-            coords = np.array([[p.x, p.y, p.z] for p in hand.landmark]).flatten()
-            out[slot * 63:(slot + 1) * 63] = coords
+            slot = 0 if info.classification[0].label == "Left" else 1
+            pts = np.array([[p.x, p.y, p.z] for p in hand.landmark])
+            out[slot * 65:(slot + 1) * 65] = _norm_hand(pts)
     return out

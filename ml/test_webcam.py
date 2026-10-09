@@ -11,6 +11,7 @@ with mp_hands.Hands(max_num_hands=2,
                     min_tracking_confidence=0.5) as hands:
     while cap.isOpened():
         ok, frame = cap.read()
+        frame = cv2.flip(frame, 1)
         if not ok:
             break
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
