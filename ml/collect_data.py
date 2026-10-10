@@ -6,9 +6,10 @@ import numpy as np
 import mediapipe as mp
 from utils import extract_keypoints
 
-SIGNS = ["hello", "thank_you", "yes", "no", "please"]   # edit this list
-SEQ_LEN = 30        # frames per sample (about 1 second)
-PER_SIGN = 30       # samples to record per sign
+SIGNS = ["idle"]
+SEQ_LEN = 30        # frames per sample used by the model
+REC_FRAMES = 60     # frames recorded (about 2 seconds), shrunk to SEQ_LEN
+PER_SIGN = 20       # samples to record per sign
 OUT = Path("data/landmarks")
 
 mp_hands = mp.solutions.hands
@@ -39,7 +40,7 @@ def main():
         for sign in SIGNS:
             d = OUT / sign
             d.mkdir(parents=True, exist_ok=True)
-            n = len(list(d.glob("*.npy")))           # resume where you stopped
+            n = len(list(d.glob("my_*.npy")))        # count only your own recordings
             while n < PER_SIGN:
                 frame, results = read(cap, hands)
                 if frame is None:
@@ -54,15 +55,21 @@ def main():
                     t0 = time.time()
                     while time.time() - t0 < 2:      # 2 second countdown
                         frame, _ = read(cap, hands)
+                        if frame is None:
+                            return
                         show(frame, f"Get ready: {sign}", (0, 200, 255))
                         cv2.waitKey(1)
                     seq = []
-                    while len(seq) < SEQ_LEN:
+                    while len(seq) < REC_FRAMES:
                         frame, results = read(cap, hands)
+                        if frame is None:
+                            return
                         seq.append(extract_keypoints(results))
-                        show(frame, f"RECORDING {sign} {len(seq)}/{SEQ_LEN}", (0, 0, 255))
+                        show(frame, f"RECORDING {sign} {len(seq)}/{REC_FRAMES}", (0, 0, 255))
                         cv2.waitKey(1)
-                    np.save(d / f"{n:03d}.npy", np.array(seq))
+                    # shrink 60 frames to 30, same timing as the dataset clips
+                    seq = np.array(seq)[np.linspace(0, REC_FRAMES - 1, SEQ_LEN).astype(int)]
+                    np.save(d / f"my_{n:03d}.npy", seq)
                     n += 1
     cap.release()
     cv2.destroyAllWindows()

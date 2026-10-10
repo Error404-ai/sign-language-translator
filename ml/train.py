@@ -43,3 +43,8 @@ print(f"\nTEST ACCURACY: {acc:.2%} on {len(yte)} samples")
 Path("models").mkdir(exist_ok=True)
 model.save("models/sign_lstm.keras")
 json.dump(signs, open("models/labels.json", "w"))
+
+from sklearn.metrics import confusion_matrix, classification_report
+pred = model.predict(Xte, verbose=0).argmax(axis=1)
+print(classification_report(yte, pred, target_names=signs, zero_division=0))
+(confusion_matrix(yte, pred))
