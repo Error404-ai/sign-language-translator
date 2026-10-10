@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SignBridge</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
+    canvas { border-radius: 8px; max-width: 95vw; }
+    #word { font-size: 56px; margin: 12px; min-height: 70px; color: #4ade80; }
+    #info { color: #aaa; }
+  </style>
+</head>
+<body>
+  <h1>SignBridge</h1>
+  <canvas id="c" width="640" height="480"></canvas>
+  <div id="word">...</div>
+  <div id="info">loading hand model...</div>
+  <video id="v" playsinline muted style="display:none"></video>
+
+  <script type="module">
+    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+    const API = "http://localhost:8000/predict";
+    const BUF = 75, SEQ = 30, MOTION_MIN = 0.008, CONF_MIN = 0.8;
+    const video = document.getElementById("v");
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    const wordEl = document.getElementById("word");
+    const infoEl = document.getElementById("info");
+    let buf = [], n = 0, busy = false, lastLm = [], lastT = -1;
+
+    // same math as ml/utils.py
+    function normHand(pts) {
+      const w = pts[0];
+      const rel = pts.map(p => [p[0] - w[0], p[1] - w[1], p[2] - w[2]]);
+      const s = Math.hypot(...rel[9]) || 1;
+      return [...rel.flat().map(v => v / s), w[0], w[1]];
+    }
+    function keypoints(res) {
+      const out = new Array(130).fill(0);
+      const hs = res.landmarks || [], inf = res.handedness || [];
+      hs.forEach((h, i) => {
+        const slot = inf[i][0].categoryName === "Left" ? 0 : 1;
+        const v = normHand(h.map(p => [p.x, p.y, p.z]));
+        v.forEach((x, j) => out[slot * 65 + j] = x);
+      });
+      return out;
+    }
+
+    async function predict() {
+      const seq = Array.from({length: SEQ}, (_, i) => buf[Math.round(i * (BUF - 1) / (SEQ - 1))]);
+      const present = seq.map(f => f.some(x => x !== 0));
+      if (present.filter(Boolean).length / SEQ <= 0.5) {
+        wordEl.textContent = "..."; infoEl.textContent = "no hands"; return;
+      }
+      let sum = 0, cnt = 0;
+      for (let i = 1; i < SEQ; i++) {
+        if (present[i] && present[i - 1]) {
+          sum += seq[i].reduce((a, x, j) => a + Math.abs(x - seq[i - 1][j]), 0) / 130; cnt++;
+        }
+      }
+      const motion = cnt ? sum / cnt : 0;
+      busy = true;
+      try {
+        const r = await fetch(API, {method: "POST", headers: {"Content-Type": "application/json"},
+                                    body: JSON.stringify({sequence: seq})});
+        const d = await r.json();
+        const ok = d.confidence > CONF_MIN && d.label !== "idle" && motion > MOTION_MIN;
+        wordEl.textContent = ok ? d.label.replaceAll("_", " ") : "...";
+        infoEl.textContent = `${d.label} ${(d.confidence * 100).toFixed(0)}% | motion ${motion.toFixed(4)}`;
+      } catch (e) { infoEl.textContent = "server error: " + e; }
+      busy = false;
+    }
+
+    // offscreen mirrored copy of the frame for hand detection
+    // (training data was recorded in selfie view)
+    const off = document.createElement("canvas");
+    off.width = 640; off.height = 480;
+    const octx = off.getContext("2d");
+
+    function draw() {                 // always runs, never waits for MediaPipe
+      ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore();
+      lastLm.forEach(h => h.forEach(p => {
+        ctx.fillStyle = "red"; ctx.beginPath();
+        ctx.arc(p.x * canvas.width, p.y * canvas.height, 4, 0, 7); ctx.fill();
+      }));
+      requestAnimationFrame(draw);
+    }
+
+    let landmarker;
+    function detect() {
+      if (video.readyState >= 2 && video.currentTime !== lastT) {
+        lastT = video.currentTime;
+        octx.save(); octx.translate(640, 0); octx.scale(-1, 1);
+        octx.drawImage(video, 0, 0, 640, 480); octx.restore();
+        try {
+          const res = landmarker.detectForVideo(off, performance.now());
+          lastLm = res.landmarks || [];
+          buf.push(keypoints(res));
+          if (buf.length > BUF) buf.shift();
+          if (++n % 5 === 0 && buf.length === BUF && !busy) predict();
+        } catch (e) { infoEl.textContent = "hands error: " + e; }
+      }
+      requestAnimationFrame(detect);
+    }
+
+    async function start() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({video: {width: 640, height: 480}});
+        video.srcObject = stream;
+        await video.play();
+        draw();
+        const files = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+        landmarker = await HandLandmarker.createFromOptions(files, {
+          baseOptions: {modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"},
+          runningMode: "VIDEO", numHands: 2,
+          minHandDetectionConfidence: 0.5, minTrackingConfidence: 0.5
+        });
+        infoEl.textContent = "ready";
+        detect();
+      } catch (e) { infoEl.textContent = "start error: " + e; }
+    }
+    start();
+  </script>
+</body>
+</html>
