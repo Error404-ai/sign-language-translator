@@ -17,3 +17,5 @@ ml/data/
 *.h5
 *.pkl
 *.npy
+.venv/
+*.zip
