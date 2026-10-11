@@ -1,3 +1,4 @@
+import sys
 import time
 from pathlib import Path
 
@@ -6,10 +7,14 @@ import numpy as np
 import mediapipe as mp
 from utils import extract_keypoints
 
-SIGNS = ["idle"]
+# usage:  python collect_data.py hello thank_you idle     (names must match the dataset folder names)
+# auto mode (no keypresses):  python collect_data.py --auto 10 hello thank_you idle
+args = sys.argv[1:]
+AUTO = bool(args) and args[0] == "--auto"
+PER_SIGN = int(args[1]) if AUTO else 20     # samples to record per sign
+SIGNS = (args[2:] if AUTO else args) or ["idle"]
 SEQ_LEN = 30        # frames per sample used by the model
 REC_FRAMES = 60     # frames recorded (about 2 seconds), shrunk to SEQ_LEN
-PER_SIGN = 20       # samples to record per sign
 OUT = Path("data/landmarks")
 
 mp_hands = mp.solutions.hands
@@ -47,20 +52,30 @@ def main():
                     return
                 show(frame, f"{sign} {n}/{PER_SIGN} | SPACE=record N=next sign Q=quit")
                 key = cv2.waitKey(1) & 0xFF
+                if AUTO:                              # rest 1s with hands down, then record
+                    t1 = time.time()
+                    while time.time() - t1 < 1:
+                        frame, _ = read(cap, hands)
+                        if frame is None:
+                            return
+                        show(frame, f"{sign} {n}/{PER_SIGN} next clip... (Q=quit)", (0, 200, 255))
+                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                            cap.release(); cv2.destroyAllWindows(); return
+                    key = 32
                 if key == ord("q"):
                     cap.release(); cv2.destroyAllWindows(); return
                 if key == ord("n"):
                     break
                 if key == 32:
                     t0 = time.time()
-                    while time.time() - t0 < 2:      # 2 second countdown
+                    while time.time() - t0 < (1.2 if AUTO else 2):   # countdown, hands DOWN
                         frame, _ = read(cap, hands)
                         if frame is None:
                             return
-                        show(frame, f"Get ready: {sign}", (0, 200, 255))
+                        show(frame, f"Get ready (hands down): {sign}", (0, 200, 255))
                         cv2.waitKey(1)
                     seq = []
-                    while len(seq) < REC_FRAMES:
+                    while len(seq) < REC_FRAMES:     # raise hands, sign once, lower hands
                         frame, results = read(cap, hands)
                         if frame is None:
                             return

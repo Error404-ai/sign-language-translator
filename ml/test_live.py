@@ -12,14 +12,23 @@ buf = collections.deque(maxlen=BUF)
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 text, n, motion = "...", 0, 0.0
-
-cap = cv2.VideoCapture(0)
+fails =0
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 with mp_hands.Hands(max_num_hands=2, min_detection_confidence=0.5,
                     min_tracking_confidence=0.5) as hands:
     while cap.isOpened():
         ok, frame = cap.read()
         if not ok:
-            break
+            fails += 1
+            if fails > 30:
+                print("camera read failed")
+                break
+            cv2.waitKey(1)
+            continue
+        fails = 0
         frame = cv2.flip(frame, 1)
         results = hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         if results.multi_hand_landmarks:

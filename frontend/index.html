@@ -1,128 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SignBridge</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
-    canvas { border-radius: 8px; max-width: 95vw; }
-    #word { font-size: 56px; margin: 12px; min-height: 70px; color: #4ade80; }
-    #info { color: #aaa; }
+    :root { --bg:#0f1115; --card:#181b22; --line:#262b36; --txt:#e8eaf0; --dim:#8b93a5; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --acc:#60a5fa; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--txt); }
+    header { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--line); }
+    header h1 { margin:0; font-size:20px; } header h1 span { color:var(--acc); }
+    .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--bad); margin-right:6px; }
+    .dot.ok { background:var(--ok); } .dot.mid { background:var(--warn); }
+    nav { display:flex; gap:8px; padding:12px 24px 0; }
+    nav button { background:none; border:1px solid var(--line); color:var(--dim); padding:8px 16px; border-radius:8px 8px 0 0; cursor:pointer; }
+    nav button.on { background:var(--card); color:var(--txt); border-bottom-color:var(--card); }
+    main { max-width:1100px; margin:0 auto; padding:0 24px 40px; }
+    .tab { display:none; background:var(--card); border:1px solid var(--line); border-radius:0 10px 10px 10px; padding:20px; }
+    .tab.on { display:grid; gap:20px; }
+    #signTab.on { grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); }
+    @media (max-width:820px){ #signTab.on { grid-template-columns:1fr; } }
+    .cam { position:relative; } canvas { width:100%; border-radius:10px; background:#000; display:block; }
+    .badge { position:absolute; left:10px; top:10px; padding:5px 12px; border-radius:20px; font-size:13px; background:#000a; border:1px solid var(--line); }
+    .badge.capturing { border-color:var(--ok); color:var(--ok); } .badge.predicting { border-color:var(--acc); color:var(--acc); }
+    .box { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+    .box h3 { margin:0 0 10px; font-size:13px; color:var(--dim); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    #big { font-size:40px; min-height:52px; color:var(--ok); } #big.unsure { color:var(--warn); font-size:28px; }
+    .bar { display:grid; grid-template-columns:110px 1fr 44px; gap:8px; align-items:center; font-size:13px; margin:5px 0; }
+    .bar i { display:block; height:8px; border-radius:4px; background:var(--acc); }
+    .bar div { background:var(--line); border-radius:4px; }
+    #sentence { font-size:22px; min-height:34px; word-break:break-word; }
+    button.s { background:var(--line); color:var(--txt); border:0; padding:7px 12px; border-radius:7px; cursor:pointer; margin:8px 6px 0 0; }
+    button.s:hover { background:#333a49; } button.p { background:var(--acc); color:#06101f; }
+    ol { margin:0; padding-left:20px; font-size:14px; color:var(--dim); } li b { color:var(--txt); }
+    textarea { width:100%; background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:12px; font-size:16px; resize:vertical; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; } .chip { padding:8px 14px; border-radius:20px; border:1px solid var(--line); font-size:15px; }
+    .chip.sign { border-color:var(--ok); color:var(--ok); } .chip.fs { color:var(--dim); } .chip.now { background:var(--acc); color:#06101f; border-color:var(--acc); }
+    #stage { font-size:44px; text-align:center; min-height:70px; color:var(--acc); }
+    details { font-size:13px; color:var(--dim); } details label { display:block; margin:8px 0; } input[type=range] { width:200px; vertical-align:middle; }
+    small { color:var(--dim); }
   </style>
 </head>
 <body>
-  <h1>SignBridge</h1>
-  <canvas id="c" width="640" height="480"></canvas>
-  <div id="word">...</div>
-  <div id="info">loading hand model...</div>
-  <video id="v" playsinline muted style="display:none"></video>
+<header>
+  <h1>Sign<span>Bridge</span></h1>
+  <div><span class="dot" id="dotBack"></span><small>backend</small> &nbsp; <span class="dot" id="dotMl"></span><small>model</small></div>
+</header>
+<nav>
+  <button class="on" data-tab="signTab">Sign → Text</button>
+  <button data-tab="textTab">Text / Speech → Sign</button>
+</nav>
+<main>
+  <section id="signTab" class="tab on">
+    <div>
+      <div class="cam"><canvas id="cam" width="640" height="480"></canvas><div class="badge" id="badge">loading hand model…</div></div>
+      <button class="s" id="modeBtn">Mode: Words</button>
+      <details style="margin-top:12px"><summary>Tuning &amp; debug</summary>
+        <label>Min confidence <input type="range" id="conf" min="0.3" max="0.95" step="0.05" value="0.7"> <b id="confV">0.70</b></label>
+        <label>Stillness threshold <input type="range" id="still" min="0.005" max="0.08" step="0.005" value="0.02"> <b id="stillV">0.020</b></label>
+        <label><input type="checkbox" id="swap" checked> Swap left/right hand slots (try this if accuracy is bad everywhere)</label>
+        <div>live motion: <b id="mot">0.000</b> &nbsp; frames in clip: <b id="fr">0</b></div>
+      </details>
+    </div>
+    <div>
+      <div class="box"><h3>Last sign</h3><div id="big">—</div><div id="top3"></div><small id="meta"></small></div>
+      <div class="box"><h3>Sentence</h3><div id="sentence">&nbsp;</div>
+        <button class="s p" id="speak">🔊 Speak</button><button class="s" id="undo">Undo</button><button class="s" id="clear">Clear</button>
+      </div>
+      <div class="box"><h3>How to sign</h3><ol><li><b>Raise</b> your hands into view</li><li>Do <b>one</b> sign</li><li><b>Drop</b> your hands (or hold still) — it is recognised then</li></ol></div>
+      <div class="box"><h3>Recent</h3><ol id="hist"></ol></div>
+    </div>
+  </section>
 
-  <script type="module">
-    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
-    const API = "http://localhost:8000/predict";
-    const BUF = 75, SEQ = 30, MOTION_MIN = 0.008, CONF_MIN = 0.8;
-    const video = document.getElementById("v");
-    const canvas = document.getElementById("c");
-    const ctx = canvas.getContext("2d");
-    const wordEl = document.getElementById("word");
-    const infoEl = document.getElementById("info");
-    let buf = [], n = 0, busy = false, lastLm = [], lastT = -1;
-
-    // same math as ml/utils.py
-    function normHand(pts) {
-      const w = pts[0];
-      const rel = pts.map(p => [p[0] - w[0], p[1] - w[1], p[2] - w[2]]);
-      const s = Math.hypot(...rel[9]) || 1;
-      return [...rel.flat().map(v => v / s), w[0], w[1]];
-    }
-    function keypoints(res) {
-      const out = new Array(130).fill(0);
-      const hs = res.landmarks || [], inf = res.handedness || [];
-      hs.forEach((h, i) => {
-        const slot = inf[i][0].categoryName === "Left" ? 0 : 1;
-        const v = normHand(h.map(p => [p.x, p.y, p.z]));
-        v.forEach((x, j) => out[slot * 65 + j] = x);
-      });
-      return out;
-    }
-
-    async function predict() {
-      const seq = Array.from({length: SEQ}, (_, i) => buf[Math.round(i * (BUF - 1) / (SEQ - 1))]);
-      const present = seq.map(f => f.some(x => x !== 0));
-      if (present.filter(Boolean).length / SEQ <= 0.5) {
-        wordEl.textContent = "..."; infoEl.textContent = "no hands"; return;
-      }
-      let sum = 0, cnt = 0;
-      for (let i = 1; i < SEQ; i++) {
-        if (present[i] && present[i - 1]) {
-          sum += seq[i].reduce((a, x, j) => a + Math.abs(x - seq[i - 1][j]), 0) / 130; cnt++;
-        }
-      }
-      const motion = cnt ? sum / cnt : 0;
-      busy = true;
-      try {
-        const r = await fetch(API, {method: "POST", headers: {"Content-Type": "application/json"},
-                                    body: JSON.stringify({sequence: seq})});
-        const d = await r.json();
-        const ok = d.confidence > CONF_MIN && d.label !== "idle" && motion > MOTION_MIN;
-        wordEl.textContent = ok ? d.label.replaceAll("_", " ") : "...";
-        infoEl.textContent = `${d.label} ${(d.confidence * 100).toFixed(0)}% | motion ${motion.toFixed(4)}`;
-      } catch (e) { infoEl.textContent = "server error: " + e; }
-      busy = false;
-    }
-
-    // offscreen mirrored copy of the frame for hand detection
-    // (training data was recorded in selfie view)
-    const off = document.createElement("canvas");
-    off.width = 640; off.height = 480;
-    const octx = off.getContext("2d");
-
-    function draw() {                 // always runs, never waits for MediaPipe
-      ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore();
-      lastLm.forEach(h => h.forEach(p => {
-        ctx.fillStyle = "red"; ctx.beginPath();
-        ctx.arc(p.x * canvas.width, p.y * canvas.height, 4, 0, 7); ctx.fill();
-      }));
-      requestAnimationFrame(draw);
-    }
-
-    let landmarker;
-    function detect() {
-      if (video.readyState >= 2 && video.currentTime !== lastT) {
-        lastT = video.currentTime;
-        octx.save(); octx.translate(640, 0); octx.scale(-1, 1);
-        octx.drawImage(video, 0, 0, 640, 480); octx.restore();
-        try {
-          const res = landmarker.detectForVideo(off, performance.now());
-          lastLm = res.landmarks || [];
-          buf.push(keypoints(res));
-          if (buf.length > BUF) buf.shift();
-          if (++n % 5 === 0 && buf.length === BUF && !busy) predict();
-        } catch (e) { infoEl.textContent = "hands error: " + e; }
-      }
-      requestAnimationFrame(detect);
-    }
-
-    async function start() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({video: {width: 640, height: 480}});
-        video.srcObject = stream;
-        await video.play();
-        draw();
-        const files = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-        landmarker = await HandLandmarker.createFromOptions(files, {
-          baseOptions: {modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"},
-          runningMode: "VIDEO", numHands: 2,
-          minHandDetectionConfidence: 0.5, minTrackingConfidence: 0.5
-        });
-        infoEl.textContent = "ready";
-        detect();
-      } catch (e) { infoEl.textContent = "start error: " + e; }
-    }
-    start();
-  </script>
+  <section id="textTab" class="tab">
+    <div>
+      <textarea id="txt" rows="3" placeholder="Type a sentence, e.g. thank you good morning"></textarea>
+      <button class="s p" id="go">Translate to signs</button><button class="s" id="mic">🎤 Speak</button><small id="micInfo"></small>
+    </div>
+    <div class="box"><h3>Sign sequence</h3><div class="chips" id="chips"></div></div>
+    <div class="box"><h3>Player</h3><canvas id="hand" width="640" height="360"></canvas><div id="stage">—</div><button class="s" id="play">▶ Play sequence</button></div>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
 </body>
 </html>
