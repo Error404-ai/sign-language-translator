@@ -1,5 +1,6 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
@@ -12,10 +13,16 @@ node_modules/
 .env
 .env.local
 
-# ML artifacts (large)
+# Runtime data
+backend/data/
+
+# ML artifacts (large) - trained .keras models in ml/models/ ARE committed
 ml/data/
 *.h5
 *.pkl
 *.npy
-.venv/
 *.zip
+
+# OS / editor
+.DS_Store
+.vscode/

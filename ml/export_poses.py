@@ -1,51 +1,69 @@
+"""
+Export reference poses for the browser hand player -> frontend/assets/poses.json
+
+  letters: one clear frame per letter (middle of the first capture)
+  signs:   the clip with the most hand-visible frames (gaps filled with the last seen frame).
+           Dataset clips are preferred; your own recordings are used for signs the dataset lacks.
+
+Existing entries in poses.json are kept for labels that have no data on this machine,
+so exporting on a laptop with only part of the data never deletes animations.
+"""
 import json
-from pathlib import Path
+
 import numpy as np
 
-ROOT = Path("data")
-OUT = Path("../frontend/poses.json")
-out = {"letters": {}, "signs": {}}
+from signbridge.config import KINDS, ML_DIR
+from signbridge.keypoints import hand_present
+
+OUT = ML_DIR.parent / "frontend" / "assets" / "poses.json"
 
 
-def present(a):
-    return (a != 0).any(axis=1)
-
-
-# letters: one clear frame (middle of the first capture)
-for d in sorted((ROOT / "alphabet").iterdir()):
-    files = sorted(d.glob("*.npy"))
-    if not files:
-        continue
-    seq = np.load(files[0])
-    ok = np.where(present(seq))[0]
-    if len(ok) == 0:
-        continue
-    out["letters"][d.name] = np.round(seq[ok[len(ok) // 2]], 3).tolist()
-
-# word signs: the dataset clip (30 frames) with the most frames where hands were found
-for d in sorted((ROOT / "landmarks").iterdir()):
-    if not d.is_dir() or d.name == "idle":
-        continue
-    best, score = None, -1
-    for f in d.glob("*.npy"):
-        if f.name.startswith("my_"):
+def letter_frames():
+    out = {}
+    root = KINDS["letters"]["data"]
+    for d in sorted(root.iterdir()) if root.exists() else []:
+        files = sorted(d.glob("*.npy"))
+        if not files:
             continue
-        s = np.load(f)
-        sc = int(present(s).sum())
-        if sc > score:
-            best, score = s, sc
-    if best is None or score <= 0:
-        continue
-    ok = present(best)
-    last = best[int(np.argmax(ok))]
-    frames = []
-    for fr, p in zip(best, ok):
-        if p:
-            last = fr
-        frames.append(np.round(last, 3).tolist())
-    out["signs"][d.name] = frames
+        seq = np.load(files[0])
+        ok = np.where(hand_present(seq))[0]
+        if len(ok):
+            out[d.name] = np.round(seq[ok[len(ok) // 2]], 3).tolist()
+    return out
 
-OUT.parent.mkdir(parents=True, exist_ok=True)
-OUT.write_text(json.dumps(out))
-print("letters:", len(out["letters"]), "signs:", sorted(out["signs"]))
-print("wrote", OUT.resolve())
+
+def sign_clips():
+    out = {}
+    root = KINDS["words"]["data"]
+    for d in sorted(root.iterdir()) if root.exists() else []:
+        if not d.is_dir() or d.name == "idle":
+            continue
+        files = sorted(d.glob("*.npy"))
+        dataset = [f for f in files if not f.name.startswith("my_")]
+        clips = [np.load(f) for f in (dataset or files)]
+        if not clips:
+            continue
+        best = max(clips, key=lambda s: int(hand_present(s).sum()))
+        ok = hand_present(best)
+        if not ok.any():
+            continue
+        last, frames = best[int(np.argmax(ok))], []
+        for fr, p in zip(best, ok):
+            if p:
+                last = fr
+            frames.append(np.round(last, 3).tolist())
+        out[d.name] = frames
+    return out
+
+
+if __name__ == "__main__":
+    old = json.loads(OUT.read_text()) if OUT.exists() else {}
+    new = {"letters": letter_frames(), "signs": sign_clips()}
+    poses = {k: {**old.get(k, {}), **new[k]} for k in new}
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(poses))
+    for k in poses:
+        kept = sorted(set(poses[k]) - set(new[k]))
+        print(f"{k}: {len(poses[k])} ({len(new[k])} from data" + (f", kept {len(kept)} existing)" if kept else ")"))
+    print("signs:", sorted(poses["signs"]))
+    print("wrote", OUT)

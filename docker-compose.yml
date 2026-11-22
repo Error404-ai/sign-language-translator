@@ -1,0 +1,35 @@
+# Whole app with one command:   docker compose up --build     ->  http://localhost:5050
+# With MongoDB history:         MONGO_URL=mongodb://mongo:27017/signbridge docker compose --profile mongo up --build
+# Smaller / faster speech model: WHISPER_MODEL=base docker compose up --build
+services:
+  ml:
+    build: { context: ., dockerfile: ml-server/Dockerfile }
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+    volumes:
+      - whisper-cache:/srv/cache          # the Whisper model is downloaded once, then reused
+    restart: unless-stopped
+
+  app:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    ports:
+      - "5050:5050"
+    environment:
+      ML_URL: http://ml:8000
+      MONGO_URL: ${MONGO_URL:-}
+    volumes:
+      - history:/srv/data
+    depends_on: [ml]
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    profiles: [mongo]
+    volumes:
+      - mongo:/data/db
+    restart: unless-stopped
+
+volumes:
+  whisper-cache:
+  history:
+  mongo:

@@ -1,9 +1,21 @@
 {
   "name": "signbridge-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
-  "dependencies": { "cors": "^2.8.5", "express": "^4.21.2" },
-  "engines": { "node": ">=20" }
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js ../frontend/test/*.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mongodb": "^6.22.0",
+    "ws": "^8.23.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

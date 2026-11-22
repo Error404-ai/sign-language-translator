@@ -1,0 +1,72 @@
+# SignBridge vocabulary: 54 ISL signs. `idle` is added automatically.
+#   40 come from the INCLUDE dataset (videos already turned into keypoints in data/landmarks/)
+#   14 are NOT in INCLUDE and must be recorded by the team
+# Record:  python collect.py --signer <your-name> --auto 15 --list signs.txt
+# Train:   python train.py --signs signs.txt [--split signer]
+
+# ---- from INCLUDE --------------------------------------------------------
+# greetings (9)
+hello
+how_are_you
+good_morning
+good_afternoon
+good_evening
+good_night
+thank_you
+pleased
+alright
+
+# people and pronouns (10)
+i
+you
+we
+man
+woman
+mother
+father
+friend
+teacher
+student
+
+# describing (12)
+good
+bad
+happy
+hot
+cold
+sick
+long
+short
+tall
+wide
+famous
+light
+
+# hospital (4)
+doctor
+patient
+hospital
+medicine
+
+# places, things, time (5)
+school
+house
+police
+book
+today
+
+# ---- record ourselves (not in INCLUDE) -----------------------------------
+yes
+no
+please
+sorry
+what
+where
+name
+again
+help
+pain
+water
+emergency
+understand
+stop
