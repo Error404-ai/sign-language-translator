@@ -1,0 +1,15 @@
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+.git
+.github
+*.zip
+ml/data
+backend/data
+backend/test
+frontend/test
+frontend/package.json
+**/.env
+**/.DS_Store

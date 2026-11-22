@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+numpy==1.26.4
+tensorflow==2.19.1
+keras==3.15.1
+# speech -> text (Phase C). Optional: without these, /transcribe returns 503 and the browser mic is used.
+faster-whisper==1.2.1
+python-multipart
+onnxruntime==1.20.1        # newer versions need protobuf>=4.25, which breaks mediapipe 0.10.7
+protobuf==3.20.3           # the one version mediapipe, tensorflow and onnxruntime all accept

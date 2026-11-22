@@ -1,21 +1,35 @@
-import sys, re
+"""
+Extract keypoints from every video of a dataset such as INCLUDE (resumable).
+
+  python extract_dataset.py /path/to/include          # writes data/landmarks/<label>/<clip>.npy
+"""
+import sys
 from pathlib import Path
+
 import numpy as np
+
+from signbridge.config import KINDS
+from signbridge.dataset import label_of_folder
 from video_to_npy import video_to_sequence
 
-SRC = Path(sys.argv[1])          # e.g. C:\datasets\include
-OUT = Path("data/landmarks")     # already in .gitignore via ml/data/
+OUT = KINDS["words"]["data"]
 
-videos = sorted(list(SRC.rglob("*.MOV")) + list(SRC.rglob("*.mp4")))
-print(f"found {len(videos)} videos")
 
-for i, v in enumerate(videos, 1):
-    label = re.sub(r"^\d+\.\s*", "", v.parent.name).strip().lower().replace(" ", "_")
-    d = OUT / label
-    d.mkdir(parents=True, exist_ok=True)
-    f = d / f"{v.stem}.npy"
-    if f.exists():               # resume if interrupted
-        continue
-    seq = video_to_sequence(str(v))
-    np.save(f, seq)
-    print(f"[{i}/{len(videos)}] {label}/{v.stem} nonzero={int((seq != 0).sum())}")
+def main(src):
+    videos = sorted(p for p in Path(src).rglob("*") if p.suffix.lower() in {".mov", ".mp4"})
+    print(f"found {len(videos)} videos")
+    for i, v in enumerate(videos, 1):
+        d = OUT / label_of_folder(v.parent.name)
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / f"{v.stem}.npy"
+        if f.exists():
+            continue
+        seq = video_to_sequence(v)
+        np.save(f, seq)
+        print(f"[{i}/{len(videos)}] {d.name}/{v.stem} nonzero={int((seq != 0).sum())}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit(__doc__)
+    main(sys.argv[1])
