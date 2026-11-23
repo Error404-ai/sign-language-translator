@@ -10,13 +10,14 @@ export function createJsonStore(file = config.historyFile, max = config.historyM
   let rows = null, loading = null, saving = Promise.resolve(), dirReady = null;
   // one shared first read, so concurrent first calls can't overwrite each other's add / clear
   const load = () => rows ? Promise.resolve(rows) : (loading ??= fs.readFile(file, "utf8")
-    .then(t => JSON.parse(t), () => [])
+    .then(t => JSON.parse(t)).catch(() => [])               // missing or corrupt file -> start empty
     .then(r => (rows ??= Array.isArray(r) ? r : [])));
   const persist = () => {
     const snapshot = JSON.stringify(rows);
     saving = saving.then(async () => {
       await (dirReady ??= fs.mkdir(path.dirname(file), { recursive: true }));
-      await fs.writeFile(file, snapshot);
+      await fs.writeFile(`${file}.tmp`, snapshot);           // write + rename is atomic: readers never see half a file
+      await fs.rename(`${file}.tmp`, file);
     }).catch(console.error);
     return saving;
   };
